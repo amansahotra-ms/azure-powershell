@@ -4,54 +4,46 @@ param(
     [Parameter(Mandatory = $false)]
     [string] $OutputFile = "$PSScriptRoot/outputtypes.json"
 )
+$nestedModuleNames = New-Object System.Collections.Generic.HashSet[string]
 
-# Get all psd1 files
 $psd1Files = Get-Item $PSScriptRoot\..\artifacts\$BuildConfig\Az.*\Az.*.psd1
-
-$profilePsd1 = $psd1Files | Where-Object {$_.Name -like "*Az.Accounts.psd1"}
-Import-LocalizedData -BindingVariable "psd1File" -BaseDirectory $profilePsd1.DirectoryName -FileName $profilePsd1.Name
-foreach ($nestedModule in $psd1File.RequiredAssemblies)
-{
-    $dllPath = Join-Path -Path $profilePsd1.DirectoryName -ChildPath $nestedModule
-    $Assembly = [Reflection.Assembly]::LoadFrom($dllPath)
-}
-
-$outputTypes = New-Object System.Collections.Generic.HashSet[string]
-
+$modules = New-Object System.Collections.Generic.HashSet[string]
 $psd1Files | ForEach {
     Import-LocalizedData -BindingVariable "psd1File" -BaseDirectory $_.DirectoryName -FileName $_.Name
+    $moduleName = $_.BaseName
     foreach ($nestedModule in $psd1File.NestedModules)
     {
-        if('.dll' -ne [System.IO.Path]::GetExtension($nestedModule)) 
+        if('.dll' -eq [System.IO.Path]::GetExtension($nestedModule)) 
         {
+            $modules.add($moduleName) | Out-Null
+            $nestedModuleNames.Add($nestedModuleName) | Out-Null
             continue;
         }
-        $dllPath = Join-Path -Path $_.DirectoryName -ChildPath $nestedModule
-        $Assembly = [Reflection.Assembly]::LoadFrom($dllPath)
-        $exportedTypes = $Assembly.GetTypes()
-        foreach ($exportedType in $exportedTypes)
-        {
-            foreach ($attribute in $exportedType.CustomAttributes)
-            {
-                if ($attribute.AttributeType.Name -eq "OutputTypeAttribute")
-                {
-                    $cmdletOutputTypes = $attribute.ConstructorArguments.Value.Value
-                    foreach ($cmdletOutputType in $cmdletOutputTypes)
-                    {
-                        $outputTypes.Add($cmdletOutputType.FullName) | Out-Null
-                    }
-                }
+    }
+}
+$toolsPath = "$PSScriptRoot/../tools/Tools.Common/SerializedCmdlets"
+$jsons = Get-ChildItem -Path $toolsPath -Recurse | Where-Object { $modules -contains $_.BaseName}
+$outputTypes = New-Object System.Collections.Generic.HashSet[string]
+$jsons | ForEach {
+    $jsonContent = Get-Content -Path $_.FullName
+    $jsonObject = $jsonContent | ConvertFrom-Json
+    $jsonObject.Cmdlets | ForEach {
+        $_.OutputTypes | ForEach {
+            if ([string]::IsNullOrWhiteSpace($_.Type.Name) -eq $false -and 
+                $_.Type.Name -notmatch '\d{6,}' -and
+                -not ($nestedModuleNames -contains $_.Type.AssemblyQualifiedName)) {
+                $outputTypes.add($_.Type.Name)  | Out-Null
             }
-
-            foreach ($property in $exportedType.GetProperties() | Where-Object {$_.CustomAttributes.AttributeType.Name -contains "ParameterAttribute"})
-            {
-                if ($property.PropertyType.FullName -like "*System.Nullable*``[``[*")
-                {
-                    $outputTypes.Add(($property.PropertyType.BaseType.FullName -replace "[][]", "")) | Out-Null
+        }
+        $_.Parameters | ForEach {
+            if ([string]::IsNullOrWhiteSpace($_.Type.Name) -eq $false -and 
+                $_.Type.Name -notmatch '\d{6,}' -and 
+                -not ($nestedModuleNames -contains $_.Type.AssemblyQualifiedName)) {
+                if ($property.PropertyType.FullName -like "*System.Nullable*``[``[*") {
+                    $outputTypes.Add(($_.Type.GenericTypeArguments -replace "[][]", "")) | Out-Null
                 }
-                elseif ($property.PropertyType.FullName -notlike "*``[``[*")
-                {
-                    $outputTypes.Add(($property.PropertyType.FullName -replace "[][]", "")) | Out-Null
+                elseif ($_.Type.Name -notlike "*``[*" -or $_.Type.Name -like "*``[``]*") {
+                    $outputTypes.Add(($_.Type.Name -replace "[][]", "")) | Out-Null
                 }
             }
         }

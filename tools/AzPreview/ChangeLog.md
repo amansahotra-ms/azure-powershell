@@ -1,3 +1,14 @@
+## 11.3.0 - January 2024
+#### Az.KeyVault 2.15.0
+* dkfjdkfj
+
+#### Az.Accounts 2.15.0
+* Fixed the authentication issue when using 'FederatedToken' in Sovereign Clouds. [#23742]
+* Added upcoming breaking change warning for deprecation of config parameter 'DisableErrorRecordsPersistence'.
+
+#### Az.Alb 0.1.1
+* Upgraded API version to 2023-11-01
+
 ## 11.2.0 - January 2024
 #### Az.Accounts 2.15.0
 * Fixed the authentication issue when using 'FederatedToken' in Sovereign Clouds. [#23742]

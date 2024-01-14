@@ -66,11 +66,8 @@ $labelMapping = Get-Content -Raw $OutputFile/../groupMapping.json | ConvertFrom-
 $RMpsd1s = @()
 $HelpFolders = @()
 
-$resourceManagerPath = "$PSScriptRoot/../artifacts/$BuildConfig/"
 
-$RMpsd1s += Get-ChildItem -Path $resourceManagerPath -Depth 1 | Where-Object { 
-    $_.Name -like "*.psd1" -and $_.FullName -notlike "*dll-Help*"
-}
+$RMpsd1s += Get-ChildItem -Path "$PSScriptRoot/../src/" -Recurse | Where-Object { $_.Name -like "*.psd1" -and $_.FullName -notlike "*autorest*" -and $_.FullName -notlike "*extension*"}
 
 .($PSScriptRoot + "\PreloadToolDll.ps1")
 $HelpFolders += Get-ChildItem -Path "$PSScriptRoot/../src" -Recurse -Directory | where { $_.Name -eq "help" -and (-not [Tools.Common.Utilities.ModuleFilter]::IsAzureStackModule($_.FullName)) -and $_.FullName -notlike "*\bin\*" -and (-not $_.Parent.BaseName.EndsWith(".Autorest", "CurrentCultureIgnoreCase"))}
